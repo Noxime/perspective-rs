@@ -22,19 +22,19 @@ pub mod model {
 
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     pub struct Score {
-        value: f64,
+        pub value: f64,
         #[serde(rename = "type")]
-        type_: NumberType,
+        pub type_: NumberType,
     }
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     pub struct Scores {
         #[serde(rename = "summaryScore")]
-        summary: Score,
+        pub summary: Score,
     }
     #[derive(Serialize, Deserialize, Debug)]
     pub struct Response {
         #[serde(rename = "attributeScores")]
-        scores: HashMap<ValueType, Scores>
+        pub scores: HashMap<ValueType, Scores>
     }
 }
 
