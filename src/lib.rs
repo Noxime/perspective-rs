@@ -17,18 +17,30 @@ pub mod model {
     #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
     pub enum PerspectiveError {
         EmptyInput,
+        EmptyTypes,
         RequestFailed,
-        ParsingFailed,
+        ParsingFailed(String),
     }
 
     #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum ValueType {
-        TOXICITY,
+        AttackOnAuthor,
+        AttackOnCommenter,
+        Incoherent,
+        Inflammatory,
+        LikelyToReject,
+        Obscene,
+        SevereToxicity,
+        Spam,
+        Toxicity,
+        Unsubstantial,
     }
 
     #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
     pub enum NumberType {
-        PROBABILITY,
+        #[serde(rename = "PROBABILITY")]
+        Probability,
     }
 
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -49,9 +61,20 @@ pub mod model {
     }
 
     impl From<ValueType> for String {
-        fn from(_: ValueType) -> Self {
-            // TODO: As soon as Perspective itself adds new values, do that here
-            "TOXICITY".to_string()
+        fn from(v: ValueType) -> Self {
+            match v {
+                ValueType::AttackOnAuthor    => "ATTACK_ON_AUTHOR",
+                ValueType::AttackOnCommenter => "ATTACK_ON_COMMENTER",
+                ValueType::LikelyToReject    => "LIKELY_TO_REJECT",
+                ValueType::Incoherent        => "INCOHERENT",
+                ValueType::Inflammatory      => "INFLAMMATORY",
+                ValueType::Obscene           => "OBSCENE",
+                ValueType::SevereToxicity    => "SEVERE_TOXICITY",
+                ValueType::Spam              => "SPAM",
+                ValueType::Toxicity          => "TOXICITY",
+                ValueType::Unsubstantial     => "UNSUBSTANTIAL",
+                
+            }.to_string()
         }
     } 
 }
@@ -86,27 +109,49 @@ impl PerspectiveClient {
     }
 
     /// Send given text to Perspective API and return the requested values
-    pub fn analyze(&self, text: &str) -> Result<Response, PerspectiveError> {
+    pub fn analyze(&self, text: &str, types: Vec<ValueType>) -> Result<Response, PerspectiveError> {
         if text.is_empty() {
             return Err(PerspectiveError::EmptyInput);
         }
+
+        if types.len() == 0 {
+            return Err(PerspectiveError::EmptyTypes);
+        }
+
         const ENDPOINT: &'static str = "https://commentanalyzer.googleapis.com/v1alpha1/comments:analyze";
 
-        let request = json!({
+        let mut request = json!({
             "comment": { "text": text },
             "languages": [
                 "en"
             ],
-            "requestedAttributes": { ValueType::TOXICITY: {} },
+            "requestedAttributes": { 
+                /*
+                ValueType::AttackOnAuthor:    {},
+                ValueType::AttackOnCommenter: {},
+                ValueType::LikelyToReject:    {},
+                ValueType::Incoherent:        {},
+                ValueType::Inflammatory:      {},
+                ValueType::Obscene:           {},
+                ValueType::SevereToxicity:    {},
+                ValueType::Spam:              {},
+                ValueType::Toxicity:          {},
+                ValueType::Unsubstantial:     {},
+                */
+            },
             "doNotStore": self.do_not_store
         });
+
+        for type_ in types {
+            request["requestedAttributes"].as_object_mut().unwrap().insert(String::from(type_), json!({}));
+        }
 
         let mut ret = self.client.post(ENDPOINT)
             .query(&[("key", &self.key)])
             .header(ContentType::json())
             .body(request.to_string())
             .send().map_err(|_| PerspectiveError::RequestFailed)?;
-        ret.json().map_err(|_| PerspectiveError::ParsingFailed)
+        ret.json().map_err(|why| PerspectiveError::ParsingFailed(format!("{}", why)))
     }
 }
 
@@ -116,7 +161,9 @@ mod tests {
     #[test]
     fn it_works() {
         use super::PerspectiveClient;
+        use super::model::*;
         let api = PerspectiveClient::new(env!("PERSPECTIVE_KEY"), true);
-        println!("{:#?}", api.analyze("thankfully rethinkdb and mongodb work very similar"));
+        println!("{:#?}", api.analyze("thankfully rethinkdb and mongodb work very similar", 
+            vec![ValueType::Toxicity, ValueType::Spam]));
     }
 }
