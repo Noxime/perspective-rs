@@ -89,6 +89,7 @@ pub mod model {
 /// * Open a pull request
 /// * Message me on Discord (`noxim#6410`)
 /// 
+#[derive(Clone, Debug)]
 pub struct PerspectiveClient {
     client: Client,
     key: String,
