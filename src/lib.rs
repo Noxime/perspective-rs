@@ -2,13 +2,17 @@ extern crate reqwest;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
+extern crate serde_json;
 
 use reqwest::Client;
 use reqwest::header::{ContentType};
 
+
 /// All structs that represent the data returned by the API
 pub mod model {
     use std::collections::HashMap;
+    use std::fmt::{self, Debug, Display};
 
     #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
     pub enum PerspectiveError {
@@ -43,6 +47,13 @@ pub mod model {
         #[serde(rename = "attributeScores")]
         pub scores: HashMap<ValueType, Scores>
     }
+
+    impl From<ValueType> for String {
+        fn from(_: ValueType) -> Self {
+            // TODO: As soon as Perspective itself adds new values, do that here
+            "TOXICITY".to_string()
+        }
+    } 
 }
 
 
@@ -58,6 +69,7 @@ pub mod model {
 pub struct PerspectiveClient {
     client: Client,
     key: String,
+    do_not_store: bool
 }
 
 use model::*;
@@ -65,10 +77,11 @@ use model::*;
 impl PerspectiveClient {
     
     /// create a new Perspective client with the given API key
-    pub fn new(api_key: &str) -> Self {
+    pub fn new(api_key: &str, do_not_store: bool) -> Self {
         Self {
             client: Client::new(),
             key: api_key.to_string(),
+            do_not_store
         }
     }
 
@@ -79,10 +92,19 @@ impl PerspectiveClient {
         }
         const ENDPOINT: &'static str = "https://commentanalyzer.googleapis.com/v1alpha1/comments:analyze";
 
+        let request = json!({
+            "comment": { "text": text },
+            "languages": [
+                "en"
+            ],
+            "requestedAttributes": { ValueType::TOXICITY: {} },
+            "doNotStore": self.do_not_store
+        });
+
         let mut ret = self.client.post(ENDPOINT)
             .query(&[("key", &self.key)])
             .header(ContentType::json())
-            .body(format!(r#"{{comment:{{text:"{}"}},languages:["en"],requestedAttributes:{{TOXICITY:{{}}}}}}"#, text))
+            .body(request.to_string())
             .send().map_err(|_| PerspectiveError::RequestFailed)?;
         ret.json().map_err(|_| PerspectiveError::ParsingFailed)
     }
@@ -94,7 +116,7 @@ mod tests {
     #[test]
     fn it_works() {
         use super::PerspectiveClient;
-        let api = PerspectiveClient::new(env!("PERSPECTIVE_KEY"));
+        let api = PerspectiveClient::new(env!("PERSPECTIVE_KEY"), true);
         println!("{:#?}", api.analyze("thankfully rethinkdb and mongodb work very similar"));
     }
 }
