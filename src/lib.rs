@@ -11,6 +11,13 @@ pub mod model {
     use std::collections::HashMap;
 
     #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
+    pub enum PerspectiveError {
+        EmptyInput,
+        RequestFailed,
+        ParsingFailed,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
     pub enum ValueType {
         TOXICITY,
     }
@@ -66,15 +73,18 @@ impl PerspectiveClient {
     }
 
     /// Send given text to Perspective API and return the requested values
-    pub fn analyze(self, text: &str) -> Response {
+    pub fn analyze(&self, text: &str) -> Result<Response, PerspectiveError> {
+        if text.is_empty() {
+            return Err(PerspectiveError::EmptyInput);
+        }
         const ENDPOINT: &'static str = "https://commentanalyzer.googleapis.com/v1alpha1/comments:analyze";
 
         let mut ret = self.client.post(ENDPOINT)
-            .query(&[("key", self.key)])
+            .query(&[("key", &self.key)])
             .header(ContentType::json())
             .body(format!(r#"{{comment:{{text:"{}"}},languages:["en"],requestedAttributes:{{TOXICITY:{{}}}}}}"#, text))
-            .send().unwrap();
-        ret.json().unwrap()
+            .send().map_err(|_| PerspectiveError::RequestFailed)?;
+        ret.json().map_err(|_| PerspectiveError::ParsingFailed)
     }
 }
 
